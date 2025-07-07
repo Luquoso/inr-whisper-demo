@@ -1,8 +1,9 @@
 import streamlit as st
 import whisper
-import whisper.audio
 import tempfile
 import os
+import torchaudio
+import torch
 
 st.title("🎤 Video/Audio Transcriber (Whisper-based)")
 
@@ -22,10 +23,18 @@ if uploaded_file:
     # Load whisper model
     model = whisper.load_model("base")
 
-    # Workaround for Streamlit Cloud: manually decode audio without using ffmpeg
-    audio = whisper.audio.load_audio(tmp_file_path)
-    audio = whisper.audio.pad_or_trim(audio)
-    mel = whisper.audio.log_mel_spectrogram(audio).to(model.device)
+    # Load audio using torchaudio (bypasses FFmpeg)
+    waveform, sample_rate = torchaudio.load(tmp_file_path)
+    if sample_rate != 16000:
+        resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
+        waveform = resampler(waveform)
+    audio = waveform.squeeze().numpy()
+
+    # Prepare audio for Whisper
+    audio = whisper.pad_or_trim(audio)
+    mel = whisper.log_mel_spectrogram(audio).to(model.device)
+
+    # Transcribe
     options = whisper.DecodingOptions()
     decode_result = whisper.decode(model, mel, options)
     result = {"text": decode_result.text}
