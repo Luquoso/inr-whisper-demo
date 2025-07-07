@@ -1,6 +1,6 @@
-
 import streamlit as st
 import whisper
+import whisper.audio
 import tempfile
 import os
 
@@ -21,7 +21,14 @@ if uploaded_file:
 
     # Load whisper model
     model = whisper.load_model("base")
-    result = model.transcribe(tmp_file_path)
+
+    # Workaround for Streamlit Cloud: manually decode audio without using ffmpeg
+    audio = whisper.audio.load_audio(tmp_file_path)
+    audio = whisper.audio.pad_or_trim(audio)
+    mel = whisper.audio.log_mel_spectrogram(audio).to(model.device)
+    options = whisper.DecodingOptions()
+    decode_result = whisper.decode(model, mel, options)
+    result = {"text": decode_result.text}
 
     # Show transcript
     st.subheader("📝 Transcript")
